@@ -1,0 +1,31 @@
+name: Price Update
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  schedule:
+    # midnight EST
+    - cron: "0 5 * * *"
+jobs:
+  update-prices:
+    name: "Update Price Events"
+    runs-on: ubuntu-24.04
+    env:
+      EVENTS_FILE_NAME: "data/events.json"
+      ITEMS_FILE_NAME: "data/items.json"
+      SITE_FILE_NAME: "data/sites.json"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Update price events
+        run: go run cmd/price_tracker/main.go run process
+      - run: |
+          CHANGES=$(git diff-index --name-only HEAD --)
+          if [ -n $CHANGES ]; then
+            git config user.name crosleyzack
+            git config user.email crosleyzack@gmail.com
+            # TODO add only specific changes
+            git add *
+            git commit -m "[gh-action] Update Price Events"
+            git push origin main
+          fi

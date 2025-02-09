@@ -1,0 +1,3 @@
+[
+    {"name":"patagonia","url":"https://www.patagonia.com","price_path": "div.class.price|span.itemprop.price.-1"}
+]

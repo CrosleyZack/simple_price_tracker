@@ -1,0 +1,131 @@
+version: '3'
+
+env:
+  SERVICE_NAME: price_tracker
+
+tasks:
+
+  test:
+    desc: Run all golang tests
+    deps: [proto-go]
+    cmds:
+      - go test ./...
+
+  errcheck:
+    desc: Lint the service for errors
+    cmds:
+      - errcheck ./...
+
+  exe:
+    desc: Build the golang executable for this service.
+    deps: [proto-go]
+    cmds:
+      - task: exe-worker
+        vars:
+          BIN_NAME: $SERVICE_NAME
+          BIN_PATH: ./cmd/$SERVICE_NAME
+
+  cli:list:events:
+    desc: List all events ordered by time
+    cmds:
+      - go run cmd/price_tracker/main.go list events
+
+  cli:list:items:
+    desc: List all items
+    cmds:
+      - go run cmd/price_tracker/main.go list items
+
+  cli:list:sites:
+    desc: List all sites
+    cmds:
+      - go run cmd/price_tracker/main.go list sites
+
+  cli:run:process:
+    desc: Get new events
+    cmds:
+      - go run cmd/price_tracker/main.go run process
+
+  docker-build:
+    desc: Build a docker image tagged as 'latest'
+    cmds:
+      - task: docker-build-worker
+        vars:
+          IMAGE_NAME: $SERVICE_NAME
+          IMAGE_PATH: ./cmd/$SERVICE_NAME
+
+  docker-tag:
+    desc: Tags the 'latest' version of a docker image with a new tag
+    vars:
+      GIT_COMMIT:
+        sh: git log -n 1 --format=%h
+      IMAGE_TAG: '{{ .IMAGE_TAG | default .GIT_COMMIT }}'
+    cmds:
+      - task: docker-tag-worker
+        vars:
+          IMAGE_NAME: $SERVICE_NAME
+          IMAGE_TAG: '{{ .IMAGE_TAG }}'
+
+  docker-push:
+    desc: Push a docker image
+    vars:
+      GIT_COMMIT:
+        sh: git log -n 1 --format=%h
+      IMAGE_TAG: '{{ .IMAGE_TAG | default .GIT_COMMIT }}'
+    cmds:
+      - task: docker-push-worker
+        vars:
+          IMAGE_NAME: $SERVICE_NAME
+          IMAGE_TAG: '{{ .IMAGE_TAG }}'
+
+  docker-build-tag-push:
+    desc: Build, tag, and push a docker image
+    cmds:
+      - task: docker-build
+      - task: docker-tag
+      - task: docker-push
+
+  exe-worker:
+    desc: Utility for building the binary
+    requires:
+      vars: [BIN_PATH, BIN_NAME]
+    vars:
+      GOARCH: '{{.GOARCH | default "amd64"}}'
+      GOOS: '{{.GOOS | default "linux"}}'
+      CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
+    cmds:
+      - |
+        V=`git log --pretty=format:"git:%h:%cd" --date=short HEAD^!`; \
+        GOARCH={{.GOARCH}} \
+        GOOS={{.GOOS}} \
+        CGO_ENABLED={{.CGO_ENABLED}} \
+        LD_LIBRARY_PATH={{.LD_LIBRARY_PATH}} \
+        CGO_LDFLAGS={{.CGO_LDFLAGS}} \
+        go build \
+        -ldflags "-X main.GitVer=$V" \
+        -tags={{.GO_BUILD_TAGS}} \
+        -o {{printf "%s/%s" .BIN_PATH .BIN_NAME}} \
+        {{.BIN_PATH}}
+
+  docker-build-worker:
+    desc: Build a docker image tagged as 'latest'
+    internal: true
+    requires:
+      vars: [IMAGE_NAME, IMAGE_PATH]
+    cmds:
+      - docker build -t {{.IMAGE_NAME}}:latest {{.EXTRA_BUILD_OPTS}} {{.IMAGE_PATH}}
+
+  docker-tag-worker:
+    desc: Tags the 'latest' version of a docker image with a new tag
+    internal: true
+    requires:
+      vars: [IMAGE_NAME, IMAGE_TAG]
+    cmds:
+      - docker tag {{.IMAGE_NAME}}:latest ghcr.io/crosleyzack/{{.IMAGE_NAME}}:{{.IMAGE_TAG}}
+
+  docker-push-worker:
+    desc: Push a docker image
+    internal: true
+    requires:
+      vars: [IMAGE_NAME, IMAGE_TAG]
+    cmds:
+      - docker push ghcr.io/crosleyzack/{{.IMAGE_NAME}}:{{.IMAGE_TAG}}
