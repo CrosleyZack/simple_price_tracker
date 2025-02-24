@@ -28,7 +28,7 @@ Defines how to parse prices out of specific websites
       "description": "Defintion of how to pull prices from the website. See ...",
     }
   },
-  "required": [ "name", "url", "price_path ]
+  "required": [ "name", "url", "price_path" ]
 }
 ```
 
